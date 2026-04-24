@@ -1,25 +1,55 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { Colors } from '@constants/theme';
 import type { ProyectoTesis } from '@entities/proyecto-tesis/model/types';
- 
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 const BADGE_COLOR: Record<string, string> = {
   'En Progreso': '#3498DB',
   'Completado':  '#27AE60',
-  'Suspendido':  '#E74C3C',
+  'Suspendido':  Colors.light.danger,
 };
  
 interface Props {
   proyecto: ProyectoTesis;
+  onDelete?: (id: string) => Promise<void>;
+  onPress?: () => void;
 }
  
-export function ProyectoCard({ proyecto }: Props) {
+export function ProyectoCard({ proyecto, onDelete, onPress }: Props) {
+  const [eliminando, setEliminando] = useState(false);
+
   const abrirRepo = () => {
     if (proyecto.repositorio_github)
       Linking.openURL(proyecto.repositorio_github);
   };
+
+  const confirmarBorrado = () => {
+    if (!onDelete || eliminando) return;
+
+    Alert.alert(
+      'Eliminar proyecto',
+      '¿Estás seguro de eliminar este proyecto?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setEliminando(true);
+              await onDelete(proyecto.id);
+            } catch {
+              Alert.alert('Error', 'No se pudo eliminar el proyecto. Intenta nuevamente.');
+            } finally {
+              setEliminando(false);
+            }
+          },
+        },
+      ],
+    );
+  };
  
   return (
-    <View style={styles.tarjeta}>
+    <TouchableOpacity style={styles.tarjeta} onPress={onPress} disabled={!onPress}>
       {/* Encabezado: título + badge de estado */}
       <View style={styles.encabezado}>
         <Text style={styles.titulo} numberOfLines={2}>{proyecto.titulo}</Text>
@@ -60,7 +90,21 @@ export function ProyectoCard({ proyecto }: Props) {
           <Text style={styles.repoTexto}>Ver en GitHub →</Text>
         </TouchableOpacity>
       )}
-    </View>
+
+      {onDelete && (
+        <TouchableOpacity
+          style={[styles.deleteButton, eliminando && styles.deleteButtonDisabled]}
+          onPress={confirmarBorrado}
+          disabled={eliminando}
+        >
+          {eliminando ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.deleteButtonText}>Eliminar proyecto</Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
   );
 }
  
@@ -88,4 +132,22 @@ const styles = StyleSheet.create({
   repoBoton: { marginTop: 12, paddingVertical: 8, paddingHorizontal: 12,
     backgroundColor: '#EBF5FB', borderRadius: 8, alignSelf: 'flex-start' },
   repoTexto: { color: '#2E6DA4', fontSize: 13, fontWeight: '600' },
+  deleteButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.light.danger,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonDisabled: {
+    opacity: 0.7,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });

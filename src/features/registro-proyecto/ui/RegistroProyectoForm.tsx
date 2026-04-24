@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import { Colors } from '@constants/theme';
+import type { CreateProyectoDto, EstadoProyecto } from '@entities/proyecto-tesis/model/types';
+import React, { useEffect } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator, Platform,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import type { CreateProyectoDto, EstadoProyecto }
-  from '@entities/proyecto-tesis/model/types';
-import { createProyecto, validateProyecto }
-  from '../api/createProyecto';
+import { createProyecto } from '../api/createProyecto';
  
 const FORM_INICIAL: CreateProyectoDto = {
   titulo: '',
@@ -24,6 +31,9 @@ const ESTADOS: EstadoProyecto[] = ['En Progreso', 'Completado', 'Suspendido'];
  
 interface Props {
   onSuccess?: () => void;
+  initialValue?: CreateProyectoDto;
+  submitLabel?: string;
+  onSubmit?: (dto: CreateProyectoDto) => Promise<void>;
 }
 
 // 1. EXTRAEMOS EL COMPONENTE 'Campo' AFUERA
@@ -36,66 +46,93 @@ interface CampoProps {
   valor: string;
   error?: string;
   onChangeText: (campo: keyof CreateProyectoDto, valor: string) => void;
+  onBlur?: () => void;
+  onlyLetters?: boolean;
 }
 
 const Campo = ({
   label, campo, placeholder, multiline = false, keyboardType = 'default',
-  valor, error, onChangeText
-}: CampoProps) => (
-  <View style={styles.campoContenedor}>
-    <Text style={styles.etiqueta}>{label}</Text>
-    <TextInput
-      style={[
-        styles.input,
-        multiline && styles.inputMultiline,
-        error ? styles.inputError : null,
-      ]}
-      placeholder={placeholder}
-      placeholderTextColor="#999"
-      value={valor}
-      onChangeText={val => onChangeText(campo, val)}
-      multiline={multiline}
-      numberOfLines={multiline ? 3 : 1}
-      keyboardType={keyboardType}
-      autoCapitalize={campo === 'repositorio_github' ? 'none' : 'sentences'}
-    />
-    {error ? (
-      <Text style={styles.textoError}>{error}</Text>
-    ) : null}
-  </View>
-);
- 
-export function RegistroProyectoForm({ onSuccess }: Props) {
-  const [form, setForm] = useState<CreateProyectoDto>(FORM_INICIAL);
-  const [errores, setErrores] = useState<Record<string, string>>({});
-  const [cargando, setCargando] = useState(false);
- 
-  const actualizar = (campo: keyof CreateProyectoDto, valor: string) => {
-    setForm(prev => ({ ...prev, [campo]: valor }));
-    if (errores[campo]) setErrores(prev => ({ ...prev, [campo]: '' }));
-  };
- 
-  const handleGuardar = async () => {
-    const validacion = validateProyecto(form);
-    if (validacion.length > 0) {
-      const mapa: Record<string, string> = {};
-      validacion.forEach(e => { mapa[e.field] = e.message; });
-      setErrores(mapa);
-      Alert.alert('Formulario incompleto', 'Revisa los campos marcados en rojo.');
-      return;
+  valor, error, onChangeText, onlyLetters = false
+}: CampoProps) => {
+  const handleChange = (val: string) => {
+    if (onlyLetters) {
+      // Solo permite letras, espacios, comas, puntos y guiones
+      const soloLetras = val.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s,.\-]/g, '');
+      onChangeText(campo, soloLetras);
+    } else {
+      onChangeText(campo, val);
     }
+  };
+  
+  return (
+    <View style={styles.campoContenedor}>
+      <Text style={styles.etiqueta}>{label}</Text>
+      <TextInput
+        style={[
+          styles.input,
+          multiline && styles.inputMultiline,
+          error ? styles.inputError : null,
+        ]}
+        placeholder={placeholder}
+        placeholderTextColor="#999"
+        value={valor}
+        onChangeText={handleChange}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
+        keyboardType={keyboardType}
+        autoCapitalize={campo === 'repositorio_github' ? 'none' : 'sentences'}
+      />
+      {error ? (
+        <Text style={styles.textoError}>{error}</Text>
+      ) : null}
+    </View>
+  );
+};
  
+export function RegistroProyectoForm({ onSuccess, initialValue, submitLabel, onSubmit }: Props) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { isSubmitting },
+  } = useForm<CreateProyectoDto>({
+    defaultValues: initialValue ?? FORM_INICIAL,
+    mode: 'onBlur',
+  });
+
+  useEffect(() => {
+    reset(initialValue ?? FORM_INICIAL);
+  }, [initialValue, reset]);
+
+  const estadoActual = watch('estado');
+
+  const onSubmitForm = async (data: CreateProyectoDto) => {
     try {
-      setCargando(true);
-      await createProyecto(form);
-      Alert.alert('¡Éxito!', 'Proyecto de tesis registrado correctamente.', [
-        { text: 'OK', onPress: () => { setForm(FORM_INICIAL); onSuccess?.(); } }
+      if (onSubmit) {
+        await onSubmit(data);
+      } else {
+        await createProyecto(data);
+      }
+
+      Alert.alert('¡Éxito!', onSubmit ? 'Proyecto actualizado correctamente.' : 'Proyecto de tesis registrado correctamente.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (!onSubmit) reset(FORM_INICIAL);
+            onSuccess?.();
+          },
+        },
       ]);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar el proyecto. Verifica tu conexión.');
-    } finally {
-      setCargando(false);
+      const mensajeError = error instanceof Error ? error.message : 'Error desconocido';
+      Alert.alert('Error', onSubmit ? `No se pudo actualizar el proyecto: ${mensajeError}` : `No se pudo guardar el proyecto: ${mensajeError}`);
     }
+  };
+
+  const handleInvalid = () => {
+    Alert.alert('Formulario incompleto', 'Revisa los campos marcados en rojo.');
   };
  
   return (
@@ -104,78 +141,157 @@ export function RegistroProyectoForm({ onSuccess }: Props) {
       contentContainerStyle={styles.scroll}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.titulo}>Nuevo Proyecto de Tesis</Text>
-      <Text style={styles.subtitulo}>ESFOT — Tecnología Superior en Desarrollo de Software</Text>
+      <Text style={styles.titulo}>{onSubmit ? 'Editar Proyecto de Tesis' : 'Nuevo Proyecto de Tesis'}</Text>
+      <Text style={styles.subtitulo}>{onSubmit ? 'Actualiza los datos del proyecto y guarda los cambios' : 'ESFOT — Tecnología Superior en Desarrollo de Software'}</Text>
  
-      {/* 2. AHORA LE PASAMOS EL VALOR, ERROR Y LA FUNCIÓN ONCHANGETEXT POR PROPS */}
-      <Campo
-        label="Título del Proyecto *"
-        campo="titulo"
-        placeholder="Ej: Sistema de gestión de inventarios para PYMES"
-        valor={form.titulo}
-        error={errores.titulo}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="titulo"
+        rules={{ required: 'El título es obligatorio' }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Título del Proyecto *"
+            campo="titulo"
+            placeholder="Ej: Sistema de gestión de inventarios para PYMES"
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+          />
+        )}
       />
-      <Campo
-        label="Descripción"
-        campo="descripcion"
-        placeholder="Describe brevemente el objetivo del proyecto..."
-        multiline
-        valor={form.descripcion}
-        error={errores.descripcion}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="descripcion"
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Descripción"
+            campo="descripcion"
+            placeholder="Describe brevemente el objetivo del proyecto..."
+            multiline
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+          />
+        )}
       />
-      <Campo
-        label="Autores * (separa con comas)"
-        campo="autores"
-        placeholder="Ej: Ana Torres, Luis Pérez"
-        valor={form.autores}
-        error={errores.autores}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="autores"
+        rules={{ required: 'Ingresa al menos un autor' }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Autores * (separa con comas)"
+            campo="autores"
+            placeholder="Ej: Ana Torres, Luis Pérez"
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+            onlyLetters={true}
+          />
+        )}
       />
-      <Campo
-        label="Tutor Docente *"
-        campo="tutor_docente"
-        placeholder="Ej: Ing. Juan Carlos Gonzalez Msc."
-        valor={form.tutor_docente}
-        error={errores.tutor_docente}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="tutor_docente"
+        rules={{ required: 'El tutor docente es obligatorio' }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Tutor Docente *"
+            campo="tutor_docente"
+            placeholder="Ej: Ing. Juan Carlos Gonzalez Msc."
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+            onlyLetters={true}
+          />
+        )}
       />
-      <Campo
-        label="Tecnologías Utilizadas * (separa con comas)"
-        campo="tecnologias_utilizadas"
-        placeholder="Ej: React Native, Node.js, PostgreSQL, AWS"
-        valor={form.tecnologias_utilizadas}
-        error={errores.tecnologias_utilizadas}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="tecnologias_utilizadas"
+        rules={{ required: 'Especifica las tecnologías' }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Tecnologías Utilizadas * (separa con comas)"
+            campo="tecnologias_utilizadas"
+            placeholder="Ej: React Native, Node.js, PostgreSQL, AWS"
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+          />
+        )}
       />
-      <Campo
-        label="Fecha de Inicio * (AAAA-MM-DD)"
-        campo="fecha_inicio"
-        placeholder="Ej: 2025-03-01"
-        valor={form.fecha_inicio}
-        error={errores.fecha_inicio}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="fecha_inicio"
+        rules={{
+          required: 'La fecha de inicio es obligatoria',
+          pattern: {
+            value: /^\d{4}-\d{2}-\d{2}$/,
+            message: 'Formato: AAAA-MM-DD',
+          },
+        }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Fecha de Inicio * (AAAA-MM-DD)"
+            campo="fecha_inicio"
+            placeholder="Ej: 2025-03-01"
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+          />
+        )}
       />
-      <Campo
-        label="Fecha de Fin (AAAA-MM-DD)"
-        campo="fecha_fin"
-        placeholder="Ej: 2025-12-31 (dejar vacío si está en progreso)"
-        valor={form.fecha_fin as string}
-        error={errores.fecha_fin}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="fecha_fin"
+        rules={{
+          pattern: {
+            value: /^\d{4}-\d{2}-\d{2}$/,
+            message: 'Formato: AAAA-MM-DD',
+          },
+        }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Fecha de Fin (AAAA-MM-DD)"
+            campo="fecha_fin"
+            placeholder="Ej: 2025-12-31 (dejar vacío si está en progreso)"
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+          />
+        )}
       />
-      <Campo
-        label="Repositorio GitHub"
-        campo="repositorio_github"
-        placeholder="https://github.com/usuario/repositorio"
-        keyboardType="url"
-        valor={form.repositorio_github as string}
-        error={errores.repositorio_github}
-        onChangeText={actualizar}
+      <Controller
+        control={control}
+        name="repositorio_github"
+        rules={{
+          pattern: {
+            value: /^https?:\/\/.+/,
+            message: 'Debe ser una URL válida',
+          },
+        }}
+        render={({ field, fieldState }) => (
+          <Campo
+            label="Repositorio GitHub"
+            campo="repositorio_github"
+            placeholder="https://github.com/usuario/repositorio"
+            keyboardType="url"
+            valor={field.value ?? ''}
+            error={fieldState.error?.message}
+            onChangeText={(_, valor) => field.onChange(valor)}
+            onBlur={field.onBlur}
+          />
+        )}
       />
  
-      {/* Selector de Estado */}
       <View style={styles.campoContenedor}>
         <Text style={styles.etiqueta}>Estado del Proyecto</Text>
         <View style={styles.estadoContenedor}>
@@ -184,13 +300,13 @@ export function RegistroProyectoForm({ onSuccess }: Props) {
               key={est}
               style={[
                 styles.estadoBoton,
-                form.estado === est && styles.estadoBotonActivo,
+                estadoActual === est && styles.estadoBotonActivo,
               ]}
-              onPress={() => actualizar('estado', est)}
+              onPress={() => setValue('estado', est)}
             >
               <Text style={[
                 styles.estadoTexto,
-                form.estado === est && styles.estadoTextoActivo,
+                estadoActual === est && styles.estadoTextoActivo,
               ]}>{est}</Text>
             </TouchableOpacity>
           ))}
@@ -198,13 +314,13 @@ export function RegistroProyectoForm({ onSuccess }: Props) {
       </View>
  
       <TouchableOpacity
-        style={[styles.botonGuardar, cargando && styles.botonDeshabilitado]}
-        onPress={handleGuardar}
-        disabled={cargando}
+        style={[styles.botonGuardar, isSubmitting && styles.botonDeshabilitado]}
+        onPress={handleSubmit(onSubmitForm, handleInvalid)}
+        disabled={isSubmitting}
       >
-        {cargando
+        {isSubmitting
           ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.botonTexto}>Registrar Proyecto</Text>
+          : <Text style={styles.botonTexto}>{submitLabel ?? (onSubmit ? 'Actualizar Proyecto' : 'Registrar Proyecto')}</Text>
         }
       </TouchableOpacity>
     </ScrollView>
@@ -212,8 +328,8 @@ export function RegistroProyectoForm({ onSuccess }: Props) {
 }
  
 // ── ESTILOS ──────────────────────────────────────────────────
-const AZUL = '#1A3A5C';
-const AZUL_CLARO = '#2E6DA4';
+const AZUL = Colors.light.primary;
+const AZUL_CLARO = Colors.light.primary;
  
 const styles = StyleSheet.create({
   contenedor: { flex: 1, backgroundColor: '#F5F7FA' },

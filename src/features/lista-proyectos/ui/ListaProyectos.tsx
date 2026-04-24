@@ -1,11 +1,12 @@
 import { proyectoApi } from "@entities/proyecto-tesis/api/proyectoApi";
 import type { ProyectoTesis } from "@entities/proyecto-tesis/model/types";
 import { ProyectoCard } from "@widgets/proyecto-card/ProyectoCard";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text } from "react-native";
 
 export function ListaProyectos() {
+  const router = useRouter();
   const [proyectos, setProyectos] = useState<ProyectoTesis[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +30,15 @@ export function ListaProyectos() {
   useEffect(() => {
     cargarProyectos();
   }, [cargarProyectos]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await proyectoApi.delete(id);
+      setProyectos(prev => prev.filter((proyecto) => proyecto.id !== id));
+    } catch (error) {
+      console.error('[ListaProyectos.handleDelete]', error);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,7 +66,13 @@ export function ListaProyectos() {
     <FlatList
       data={proyectos}
       keyExtractor={(p) => p.id}
-      renderItem={({ item }) => <ProyectoCard proyecto={item} />}
+      renderItem={({ item }) => (
+        <ProyectoCard 
+          proyecto={item} 
+          onDelete={handleDelete} 
+          onPress={() => router.push(`/proyecto/${item.id}`)}
+        />
+      )}
       contentContainerStyle={styles.lista}
     />
   );
