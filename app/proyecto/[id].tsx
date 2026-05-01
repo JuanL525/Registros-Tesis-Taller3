@@ -1,167 +1,223 @@
-import { Colors } from '@constants/theme';
-import { proyectoApi } from '@entities/proyecto-tesis/api/proyectoApi';
-import type { ProyectoTesis } from '@entities/proyecto-tesis/model/types';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { proyectoApi } from "@entities/proyecto-tesis/api/proyectoApi";
+import type { ProyectoTesis } from "@entities/proyecto-tesis/model/types";
+import { Feather } from "@expo/vector-icons";
+import { AnimatedButton } from "@shared/ui";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
-// Componente para mostrar una fila de detalle (etiqueta y valor)
-const DetailRow = ({ label, value }: { label: string; value?: string | null }) => {
-  if (!value) return null;
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
-};
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function ProyectoDetalleScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [proyecto, setProyecto] = useState<ProyectoTesis | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [abriendoDoc, setAbriendoDoc] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-
-    const fetchProyecto = async () => {
-      try {
-        setCargando(true);
-        const data = await proyectoApi.getById(id);
-        setProyecto(data);
-      } catch (err) {
-        setError('No se pudo cargar el proyecto. Inténtalo de nuevo.');
-        console.error(err);
-      } finally {
-        setCargando(false);
-      }
-    };
-
-    fetchProyecto();
+    if (id) {
+      setCargando(true);
+      proyectoApi
+        .getById(id)
+        .then((data) => {
+          if (data) {
+            setProyecto(data);
+          } else {
+            console.warn(`Proyecto con id ${id} no encontrado.`);
+          }
+        })
+        .catch((error) => {
+          console.error("Error cargando el proyecto:", error);
+        })
+        .finally(() => {
+          setCargando(false);
+        });
+    }
   }, [id]);
 
-  const handleOpenUrl = async (url: string) => {
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert('Error', `No se puede abrir esta URL: ${url}`);
+  const abrirDocumento = async () => {
+    if (proyecto?.documento_url) {
+      setAbriendoDoc(true);
+      try {
+        await WebBrowser.openBrowserAsync(proyecto.documento_url);
+      } catch (error) {
+        console.error("Error al abrir el documento:", error);
+        Alert.alert("Error", "No se pudo abrir el documento.");
+      }
+      setAbriendoDoc(false);
     }
   };
 
   if (cargando) {
-    return <View style={styles.centered}><ActivityIndicator size="large" color="#1A3A5C" /></View>;
+    return (
+      <View style={styles.centro}>
+        <ActivityIndicator size="large" color="#0033A0" />
+      </View>
+    );
   }
 
-  if (error || !proyecto) {
-    return <View style={styles.centered}><Text style={styles.errorText}>{error || 'Proyecto no encontrado.'}</Text></View>;
+  if (!proyecto) {
+    return (
+      <View style={styles.centro}>
+        <Text style={styles.error}>Proyecto no encontrado.</Text>
+        <AnimatedButton
+          label="Volver a la lista"
+          onPress={() => router.back()}
+        />
+      </View>
+    );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Stack.Screen options={{ title: 'Detalle del Proyecto', headerBackTitle: 'Volver' }} />
-      
-      <View style={styles.headerSection}>
+    <ScrollView style={styles.contenedor} contentContainerStyle={styles.scroll}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Feather name="arrow-left" size={24} color="#0033A0" />
+        </TouchableOpacity>
         <Text style={styles.titulo}>{proyecto.titulo}</Text>
-        <View style={[
-          styles.badge,
-          proyecto.estado === 'En Progreso' ? styles.badgeEnProgreso :
-          proyecto.estado === 'Completado' ? styles.badgeCompletado :
-          styles.badgeSuspendido
-        ]}>
-          <Text style={styles.badgeText}>{proyecto.estado}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.etiqueta}>Descripción</Text>
+        <Text style={styles.valor}>
+          {proyecto.descripcion || "Sin descripción."}
+        </Text>
+
+        <Text style={styles.etiqueta}>Autores</Text>
+        <Text style={styles.valor}>{proyecto.autores}</Text>
+
+        <Text style={styles.etiqueta}>Tutor Docente</Text>
+        <Text style={styles.valor}>{proyecto.tutor_docente}</Text>
+
+        <Text style={styles.etiqueta}>Tecnologías</Text>
+        <Text style={styles.valor}>{proyecto.tecnologias_utilizadas}</Text>
+
+        <View style={styles.fila}>
+          <View style={styles.columna}>
+            <Text style={styles.etiqueta}>Inicio</Text>
+            <Text style={styles.valor}>{proyecto.fecha_inicio}</Text>
+          </View>
+          <View style={styles.columna}>
+            <Text style={styles.etiqueta}>Fin</Text>
+            <Text style={styles.valor}>{proyecto.fecha_fin || "En curso"}</Text>
+          </View>
         </View>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.descripcion}>{proyecto.descripcion || 'No hay descripción disponible.'}</Text>
-      </View>
-
-      <View style={styles.card}>
-        <DetailRow label="Autores" value={proyecto.autores} />
-        <DetailRow label="Tutor Docente" value={proyecto.tutor_docente} />
-        <DetailRow label="Tecnologías" value={proyecto.tecnologias_utilizadas} />
-      </View>
-
-      <View style={styles.card}>
-        <DetailRow label="Fecha de Inicio" value={new Date(proyecto.fecha_inicio).toLocaleDateString('es-EC')} />
-        {proyecto.fecha_fin && <DetailRow label="Fecha de Fin" value={new Date(proyecto.fecha_fin).toLocaleDateString('es-EC')} />}
-      </View>
-
-      {proyecto.repositorio_github && (
-        <TouchableOpacity 
-          style={styles.githubButton} 
-          onPress={() => handleOpenUrl(proyecto.repositorio_github!)}
+      {proyecto.documento_url ? (
+        <AnimatedButton
+          onPress={abrirDocumento}
+          style={styles.botonDocumento}
+          disabled={abriendoDoc}
         >
-          <Text style={styles.githubButtonText}>Ver Repositorio en GitHub</Text>
-        </TouchableOpacity>
+          {abriendoDoc ? (
+            <ActivityIndicator color="#0033A0" />
+          ) : (
+            <Text style={styles.botonDocumentoTexto}>Ver Documento PDF</Text>
+          )}
+        </AnimatedButton>
+      ) : (
+        <Text style={styles.sinDocumento}>Sin documento adjunto</Text>
       )}
 
-      <TouchableOpacity
-        style={styles.editButton}
-        onPress={() => router.push(`/proyecto/editar/${proyecto.id}`)}
-      >
-        <Text style={styles.editButtonText}>Editar proyecto</Text>
-      </TouchableOpacity>
+      <AnimatedButton
+        label="Editar Proyecto"
+        onPress={() => router.push(`/proyecto/editar/${id}`)}
+        style={styles.botonEditar}
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { fontSize: 16, color: '#E74C3C', textAlign: 'center' },
-  headerSection: { marginBottom: 16 },
-  titulo: { fontSize: 24, fontWeight: 'bold', color: '#1A3A5C', marginBottom: 12 },
-  descripcion: { fontSize: 16, lineHeight: 24, color: '#333' },
+  contenedor: {
+    flex: 1,
+    backgroundColor: "#F5F7FA",
+  },
+  scroll: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  centro: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  backButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  titulo: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#1A3A5C",
+    flex: 1,
+  },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E0E6EE',
-  },
-  detailRow: { marginBottom: 14 },
-  detailLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 4 },
-  detailValue: { fontSize: 15, color: '#1A1A1A' },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: "#fff",
     borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
   },
-  badgeEnProgreso: { backgroundColor: '#3498DB' },
-  badgeCompletado: { backgroundColor: '#2ECC71' },
-  badgeSuspendido: { backgroundColor: Colors.light.danger },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  githubButton: {
-    backgroundColor: '#24292E',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  etiqueta: {
+    fontSize: 12,
+    color: "#888",
+    fontWeight: "600",
+    marginTop: 16,
+    textTransform: "uppercase",
   },
-  githubButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
-  editButton: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 12,
+  valor: {
+    fontSize: 16,
+    color: "#333",
+    marginTop: 4,
   },
-  editButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  fila: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  columna: {
+    flex: 1,
+  },
+  botonEditar: {
+    backgroundColor: "#0033A0",
+    marginTop: 20,
+  },
+  botonDocumento: {
+    backgroundColor: "#EBF5FB",
+    borderWidth: 1,
+    borderColor: "#BCE0FD",
+  },
+  botonDocumentoTexto: {
+    color: "#0033A0",
+  },
+  sinDocumento: {
+    textAlign: "center",
+    color: "#888",
+    fontStyle: "italic",
+    marginTop: 16,
+  },
+  error: {
+    fontSize: 16,
+    color: "#C41230",
+    marginBottom: 20,
+    textAlign: "center",
+  },
 });

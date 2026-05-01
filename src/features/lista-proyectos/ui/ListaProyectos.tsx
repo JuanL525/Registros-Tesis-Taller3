@@ -1,9 +1,10 @@
 import { proyectoApi } from "@entities/proyecto-tesis/api/proyectoApi";
 import type { ProyectoTesis } from "@entities/proyecto-tesis/model/types";
+import { SkeletonCard } from "@shared/ui";
 import { ProyectoCard } from "@widgets/proyecto-card/ProyectoCard";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
 
 export function ListaProyectos() {
   const router = useRouter();
@@ -34,9 +35,9 @@ export function ListaProyectos() {
   const handleDelete = useCallback(async (id: string) => {
     try {
       await proyectoApi.delete(id);
-      setProyectos(prev => prev.filter((proyecto) => proyecto.id !== id));
+      setProyectos((prev) => prev.filter((proyecto) => proyecto.id !== id));
     } catch (error) {
-      console.error('[ListaProyectos.handleDelete]', error);
+      console.error("[ListaProyectos.handleDelete]", error);
     }
   }, []);
 
@@ -53,7 +54,11 @@ export function ListaProyectos() {
 
   if (cargando)
     return (
-      <ActivityIndicator size="large" color="#1A3A5C" style={styles.centro} />
+      <View style={styles.skeletonContainer}>
+        {[1, 2, 3, 4].map((i) => (
+          <SkeletonCard key={i} />
+        ))}
+      </View>
     );
 
   if (error)
@@ -66,10 +71,11 @@ export function ListaProyectos() {
     <FlatList
       data={proyectos}
       keyExtractor={(p) => p.id}
-      renderItem={({ item }) => (
-        <ProyectoCard 
-          proyecto={item} 
-          onDelete={handleDelete} 
+      renderItem={({ item, index }) => (
+        <ProyectoCard
+          proyecto={item}
+          index={index}
+          onDelete={handleDelete}
           onPress={() => router.push(`/proyecto/${item.id}`)}
         />
       )}
@@ -80,6 +86,7 @@ export function ListaProyectos() {
 
 const styles = StyleSheet.create({
   lista: { padding: 16 },
+  skeletonContainer: { padding: 16 },
   centro: { flex: 1, justifyContent: "center" },
   error: { color: "#E74C3C", textAlign: "center", padding: 20 },
   vacio: { color: "#888", textAlign: "center", padding: 40 },
