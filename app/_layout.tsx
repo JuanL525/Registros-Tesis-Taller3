@@ -4,11 +4,6 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 
-/**
- * Componente de guardia de autenticación
- * Redirige a /login si el usuario no está autenticado
- * Muestra un loading mientras se restaura la sesión
- */
 function AuthGuard() {
   const { user, isLoading } = useSession();
   const router = useRouter();

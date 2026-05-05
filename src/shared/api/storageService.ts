@@ -62,7 +62,6 @@ export const uploadPdf = async (
     console.error("--- ERROR FATAL EN uploadPdf ---");
     console.error(JSON.stringify(error, null, 2));
 
-    // Si el error es de red, lanzamos un mensaje más claro.
     if (error instanceof Error && error.message === "Network request failed") {
       throw new Error(
         "Fallo en la solicitud de red. Verifica la conexión a internet de tu emulador/dispositivo y que la URL de Supabase sea correcta.",
@@ -72,6 +71,3 @@ export const uploadPdf = async (
   }
 };
 
-export const deletePdf = async (filePath: string): Promise<void> => {
-  // Lógica para borrar archivo (se implementaría aquí)
-};

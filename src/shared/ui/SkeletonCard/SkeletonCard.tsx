@@ -22,10 +22,9 @@ export function SkeletonCard() {
         withTiming(1, { duration: 700 }),
         withTiming(0.3, { duration: 700 }),
       ),
-      -1, // -1 significa repetir infinitamente
+      -1, 
       false,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
